@@ -1,5 +1,6 @@
 # Configuration files
 lib/.dbconnect.config
+regs/.antigate.key
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
