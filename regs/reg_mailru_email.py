@@ -5,7 +5,7 @@ import re,sys,string,shutil,subprocess
 import random,os,web_api
 
 
-def reg_mailru_email(rproxy=web_api.get_random_proxy()):
+def _reg_mailru_email(rproxy=web_api.get_random_proxy()):
 	proxy=rproxy[0]
 	port=rproxy[1]
 	proxies = {
@@ -28,31 +28,36 @@ def reg_mailru_email(rproxy=web_api.get_random_proxy()):
 	try:
 		page_=requests.get('https://m.mail.ru/cgi-bin/signup',proxies=proxies,timeout=60)
 		page=page_.text
+		x_reg_id=re.findall('name="x_reg_id" value="(.*?)"', page)[0]
+		ID=re.findall('name="ID" value="(.*?)"', page)[0]
+		Username=re.findall('type="text" id="Username" name="(.*?)"', page)[0]
 	except:
 		page='ERROR'
-	x_reg_id=re.findall('name="x_reg_id" value="(.*?)"', page)[0]
-	ID=re.findall('name="ID" value="(.*?)"', page)[0]
-	Username=re.findall('type="text" id="Username" name="(.*?)"', page)[0]
 	try:
 		ClassName=re.findall('<label for="(.*?)" class="name">Name', page)[0]
+		Name=re.findall(' id="'+ClassName+'" name="(.*?)"', page)[0]
 	except:
 		ClassName=re.findall('<label for="(.*?)" class="name">Имя', page)[0]
-	Name=re.findall(' id="'+ClassName+'" name="(.*?)"', page)[0]
+		Name=re.findall(' id="'+ClassName+'" name="(.*?)"', page)[0]
 	try:
 		ClassLastName=re.findall('<label for="(.*?)" class="name">Last name<', page)[0]
+		LastName=re.findall(' id="'+ClassLastName+'" name="(.*?)"', page)[0]
 	except:
 		ClassLastName=re.findall('<label for="(.*?)" class="name">Фамилия<', page)[0]
-	LastName=re.findall(' id="'+ClassLastName+'" name="(.*?)"', page)[0]
+		LastName=re.findall(' id="'+ClassLastName+'" name="(.*?)"', page)[0]
 	try:
 		Gender=re.findall('"(.*?)" value="1">&nbsp;<span class="label">Male', page)[0].split('"')[-1]
 	except:
 		Gender=re.findall('"(.*?)" value="1">&nbsp;<span class="label">Мужской', page)[0].split('"')[-1]
-	birthday=re.findall('class="birthday" name="(.*?)"', page)[0]
-	birthyear=re.findall('class="birthyear" name="(.*?)"', page)[0]
-	cookie=page_.cookies
-	payload = {'MultistepMobileReg':'1','ID':ID,'Count':'1','back':'/cgi-bin/folders','browserData':'NoJS','lang':'','x_reg_id':x_reg_id,\
-	Username:UserLogin,'RegistrationDomain':RegDomain,Name:UserFLF[1],LastName:UserFLF[0],Gender:Gen,birthday:str(bd[0]),'BirthMonth':str(bd[1]),birthyear:str(bd[2]),\
-	'SavePost':'1','RegStep':'1','load':''}
+	try:
+		birthday=re.findall('class="birthday" name="(.*?)"', page)[0]
+		birthyear=re.findall('class="birthyear" name="(.*?)"', page)[0]
+		cookie=page_.cookies
+		payload = {'MultistepMobileReg':'1','ID':ID,'Count':'1','back':'/cgi-bin/folders','browserData':'NoJS','lang':'','x_reg_id':x_reg_id,\
+		Username:UserLogin,'RegistrationDomain':RegDomain,Name:UserFLF[1],LastName:UserFLF[0],Gender:Gen,birthday:str(bd[0]),'BirthMonth':str(bd[1]),birthyear:str(bd[2]),\
+		'SavePost':'1','RegStep':'1','load':''}
+	except:
+		pass
 	try:
 		page_ = requests.post("https://m.mail.ru/cgi-bin/reg", data=payload ,cookies=cookie,proxies=proxies,timeout=60)
 	except:
@@ -99,3 +104,9 @@ def reg_mailru_email(rproxy=web_api.get_random_proxy()):
 	cn.close()
 	return [registration_ok,UserLogin,RegDomain,RPassword]
 
+def reg_mailru_email(rproxy=web_api.get_random_proxy()):
+	try:
+		result=_reg_mailru_email(rproxy)
+	except:
+		result=[False,'','','']
+	return result
