@@ -67,18 +67,18 @@ def _Register_Livejournal_By_email (mail_id,rproxy=web_api.get_random_proxy()):
 		result='[REGISTRED]'
 	if page_.text.count(UserLogin)>5:
 		result='[REGISTRATION OK]'
-	return result
+	return [result,Password,UserLogin]
 
 def Register_Livejournal_By_email (mail_id,rproxy=web_api.get_random_proxy()):
-	result='[REGISTRATION ERROR]'
+	result=['[REGISTRATION ERROR]','','']
 	try:
 		result=_Register_Livejournal_By_email (mail_id,rproxy)
 	except:
 		pass
 	cn=web_api.GetConnection()
 	cr=cn.cursor()
-	if result=='[REGISTRED]' or result=='[REGISTRATION OK]':
-		cr.execute('UPDATE livejournal_accounts SET email_send=True WHERE email_id=%s;',(str(mail_id,)))
+	if result[0]=='[REGISTRED]' or result[0]=='[REGISTRATION OK]':
+		cr.execute('UPDATE livejournal_accounts SET email_send=True, password=%s, login=%s WHERE email_id=%s;',(result[1],result[2],str(mail_id,)))
 		cn.commit()
 	else:
 		cr.execute('UPDATE livejournal_accounts SET error_counter=error_counter+1 WHERE email_id=%s;',(str(mail_id,)))
@@ -87,7 +87,7 @@ def Register_Livejournal_By_email (mail_id,rproxy=web_api.get_random_proxy()):
 	cn.close()
 	return result
 
-def Confirm_Livejournal_By_email (mail_id,rproxy=web_api.get_random_proxy()):
+def _Confirm_Livejournal_By_email (mail_id,rproxy=web_api.get_random_proxy()):
 	result='[CONNECTION ERROR]'
 	proxy=rproxy[0]
 	port=rproxy[1]
@@ -99,11 +99,67 @@ def Confirm_Livejournal_By_email (mail_id,rproxy=web_api.get_random_proxy()):
 	cr=cn.cursor()
 	cr.execute('SELECT email, domain, password, fio, birthday, male FROM email_mailru WHERE id=%s;',(str(mail_id,)))
 	email=cr.fetchone()
-
+	cr.execute('SELECT login, password FROM livejournal_accounts WHERE email_id=%s;',(str(mail_id,)))
+	lg=cr.fetchone()
+	payload = {'ret':'1','user':lg[0],'password':lg[1],'action:login':''}
+	page_ = requests.post("https://www.livejournal.com/login.bml", data=payload ,proxies=proxies,timeout=60)
+	cookie=page_.cookies
+	page_=requests.get('http://'+lg[0]+'.livejournal.com/',proxies=proxies,cookies=cookie,timeout=60)
+	if page_.text.count('<p class="js-controlstrip-status">You are viewing your journal</p>')>0:
+		page_=requests.get('http://www.livejournal.com/',proxies=proxies,cookies=cookie,timeout=60)
+		if page_.text.count('To gain access to all LiveJournal features you should validate your email.')>0:
+			result='[ACCOUNT LOCKED]'
+		else:
+			result='[ACCOUNT CONFIRMED]'
 	cr.close()
 	cn.close()
+	del page_
+	if result!='[ACCOUNT CONFIRMED]':
+		page_=requests.get('https://m.mail.ru/login',proxies=proxies,timeout=60)
+		cookie=page_.cookies
+		payload = {'post':'','mhost':'m.mail.ru','login_from':'','Login':email[0],'Domain':email[1],'Password':email[2]}
+		page_ = requests.post("https://auth.mail.ru/cgi-bin/auth?rand=9763"+str(random.choice(range(1000,10000))), data=payload ,cookies=cookie,proxies=proxies,timeout=60)
+		if page_.text.count('https://m.mail.ru/messages/inbox/')>0:
+			cookie=page_.cookies
+			page_=requests.get('https://m.mail.ru/messages/inbox/?back=1',proxies=proxies,cookies=cookie,timeout=60)
+			page=page_.text
+			Messages=re.findall('<a class="messageline__link" href="(.*?)"', page)
+			for m_link in Messages:
+				page_=requests.get('https://m.mail.ru'+m_link,proxies=proxies,cookies=cookie,timeout=60)
+				page=page_.text
+				From=re.findall('<span class="readmsg__addressed-word">(.*?)</strong></a>', page)[0]
+				From=From.split('<strong>')[1]
+				if From.count('do-not-reply@livejournal.com'):
+					Confirm=re.findall('Please click on the following link to complete validation and set your primary email(.*?)</a>', page)[0]
+					Confirm=Confirm.split('http://www.livejournal.<wbr>com')[1]
+					confirm_url='http://www.livejournal.com'+Confirm.replace('<wbr>','')
+					page_=requests.get('https://www.livejournal.com/login.bml',proxies=proxies,timeout=60)
+					cookie_2=page_.cookies
+					page=page_.text
+					lj_form_auth=re.findall('name="lj_form_auth" value="(.*?)"', page)[0]
+					payload = {'ret':'1','user':lg[0],'password':lg[1],'action:login':''}
+					page_ = requests.post("https://www.livejournal.com/login.bml", data=payload ,proxies=proxies,cookies=cookie_2,timeout=60)
+					cookie_2=page_.cookies
+					page_=requests.get(confirm_url,proxies=proxies,cookies=cookie_2,timeout=60)
+					if page_.text.count('Thanks!  The email address for')>0:
+						result='[ACCOUNT CONFIRMED]'
+	return result
+
+def Confirm_Livejournal_By_email (mail_id,rproxy=web_api.get_random_proxy()):
+	try:
+		result=_Confirm_Livejournal_By_email (mail_id,rproxy)
+	except:
+		result='[CONNECTION ERROR]'
+	if result=='[ACCOUNT CONFIRMED]':
+		cn=web_api.GetConnection()
+		cr=cn.cursor()
+		cr.execute('UPDATE livejournal_accounts SET email_activated=True WHERE email_id=%s;',(str(mail_id),))
+		cn.commit()
+		cr.close()
+		cn.close()
 	return result
 
 #print (Register_Livejournal_By_email (5,['127.0.0.1','3128']))
-print (Confirm_Livejournal_By_email (5,['127.0.0.1','3128']))
+#print (Confirm_Livejournal_By_email (2,['127.0.0.1','3128']))
+#print (Confirm_Livejournal_By_email (5))
 
